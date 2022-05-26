@@ -33,10 +33,6 @@ async function tQueryFcn(tId) {
   return info;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function balanceOf(address) {
   let contractExecTx = await new ContractCallQuery()
     .setContractId(contractId)
@@ -52,7 +48,7 @@ async function balanceOf(address) {
 
 const main = async () => {
   // STEP 1 ===================================
-  console.log(`STEP 1 Create Native Token and New Account ========`);
+  console.log(`STEP 1 ===== Create native token and an account ========`);
   //Create a fungible token
   const tokenCreateTx = await new TokenCreateTransaction()
     .setTokenName("hbarRocks")
@@ -91,28 +87,20 @@ const main = async () => {
   const newAccountId = receipt.accountId;
   console.log("- The new account ID is " + newAccountId);
   client.setOperator(newAccountId, newAccountPrivateKey);
-
   let associateAccount = await new TokenAssociateTransaction()
     .setAccountId(newAccountId)
     .setTokenIds([tokenId]);
   let associateAccountTxSubmit = await associateAccount.execute(client);
   let associateAccountRx = await associateAccountTxSubmit.getReceipt(client);
   console.log(
-    `- Token association with new account: ${associateAccountRx.status}`
+    `- Token association with new account: ${associateAccountRx.status}\n`
   );
-
   client.setOperator(myAccountId, myPrivateKey);
-  const tx = await new TransferTransaction()
-    .addTokenTransfer(tokenId, myAccountId, -200)
-    .addTokenTransfer(tokenId, newAccountId, 200);
-  const res = await tx.execute(client);
-  const rec = await res.getReceipt(client);
 
   // STEP 2 ===================================
-  console.log(`STEP 2 Deploy Solidity Contract ==============`);
+  console.log(`STEP 2 ===== Deploy Solidity contract ==============`);
   // Create the smart contract
   // Create a file on Hedera and store the hex-encoded bytecode
-
   const bytecode = fs.readFileSync("./ERC20_sol_ERC20.bin");
   const fileCreateTx = new FileCreateTransaction().setKeys([myPrivateKey]);
   const fileSubmit = await fileCreateTx.execute(client);
@@ -148,33 +136,28 @@ const main = async () => {
   );
 
   let contractQuery = await new ContractCallQuery()
-    //Set the gas for the query
     .setGas(100000)
-    //Set the contract ID to return the request for
     .setContractId(contractId)
-    //Set the contract function to call
     .setFunction("tokenAddress")
-    //Set the query payment for the node returning the request
-    //This value must cover the cost of the request otherwise will fail
     .setQueryPayment(new Hbar(10));
 
   let getMessage = await contractQuery.execute(client);
-
-  console.log("- Current tokenAddress", getMessage.getAddress(0).toString());
+  console.log(
+    `- Current tokenAddress ${getMessage.getAddress(0).toString()}\n`
+  );
 
   // STEP 3 ===================================
   // Get balanceOf current account
-  console.log(`STEP 3 Check current balances ===================`);
+  console.log(`STEP 3 ===== Check balances ===================`);
   //Execute a contract function (mint)
   console.log(`- My balance: ${await balanceOf(myAccountId)}`);
-  console.log(`- New account balance: ${await balanceOf(newAccountId)}`);
+  console.log(`- New account balance: ${await balanceOf(newAccountId)}\n`);
 
   // STEP 4 ===================================
-  // Get balanceOf current account
-  // await sleep(10000);
-  console.log(`STEP 4 Transfer tokens ================`);
+  // Transfer tokens
+  console.log(`STEP 4 ===== Transfer tokens ================`);
 
-  const transferTx = await new ContractExecuteTransaction()
+  let transferTx = await new ContractExecuteTransaction()
     .setGas(4000000)
     .setContractId(contractId)
     .setMaxTransactionFee(Hbar.from(10))
@@ -185,9 +168,50 @@ const main = async () => {
         .addUint256(200)
     );
 
-  const transferRx = await transferTx.execute(client);
-  const txResult = await transferRx.getReceipt(client);
+  let transferRx = await transferTx.execute(client);
+  let txResult = await transferRx.getReceipt(client);
   console.log(`- Transfer 200 tokens to new account status ${txResult.status}`);
+  console.log(`- My balance: ${await balanceOf(myAccountId)}`);
+  console.log(`- New account balance: ${await balanceOf(newAccountId)}\n`);
+
+  // STEP 5 ===================================
+  // Approve and transferFrom
+  console.log(`STEP 5 ===== Approve and transferFrom ================`);
+  transferTx = await new ContractExecuteTransaction()
+    .setGas(4000000)
+    .setContractId(contractId)
+    .setMaxTransactionFee(Hbar.from(10))
+    .setFunction(
+      "approve",
+      new ContractFunctionParameters()
+        .addAddress(newAccountId.toSolidityAddress())
+        .addUint256(200)
+    );
+
+  transferRx = await transferTx.execute(client);
+  txResult = await transferRx.getReceipt(client);
+  console.log(
+    `- Approve 200 tokens for the new account status ${txResult.status}`
+  );
+
+  client.setOperator(newAccountId, newAccountPrivateKey);
+  transferTx = await new ContractExecuteTransaction()
+    .setGas(4000000)
+    .setContractId(contractId)
+    .setMaxTransactionFee(Hbar.from(10))
+    .setFunction(
+      "transferFrom",
+      new ContractFunctionParameters()
+        .addAddress(myAccountId.toSolidityAddress())
+        .addAddress(newAccountId.toSolidityAddress())
+        .addUint256(200)
+    );
+
+  transferRx = await transferTx.execute(client);
+  txResult = await transferRx.getReceipt(client);
+  console.log(
+    `- TransferFrom 200 tokens to new account status ${txResult.status}`
+  );
   console.log(`- My balance: ${await balanceOf(myAccountId)}`);
   console.log(`- New account balance: ${await balanceOf(newAccountId)}`);
 };

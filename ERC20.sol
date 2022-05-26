@@ -47,7 +47,10 @@ contract ERC20 {
     }
 
     function transfer(address to, uint256 amount) external returns (bool) {
-        return HTSToken.transfer(to, amount);
+        (bool success, ) = tokenAddress.delegatecall(
+            abi.encodeWithSelector(IERC20.transfer.selector, to, amount)
+        );
+        return success;
     }
 
     function allowance(address owner, address spender)
@@ -59,7 +62,10 @@ contract ERC20 {
     }
 
     function approve(address spender, uint256 amount) external returns (bool) {
-        return HTSToken.approve(spender, amount);
+        (bool success, ) = tokenAddress.delegatecall(
+            abi.encodeWithSelector(IERC20.approve.selector, spender, amount)
+        );
+        return success;
     }
 
     function transferFrom(
@@ -67,6 +73,14 @@ contract ERC20 {
         address to,
         uint256 amount
     ) external returns (bool) {
-        return HTSToken.transferFrom(from, to, amount);
+        (bool success, ) = tokenAddress.delegatecall(
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector,
+                from,
+                to,
+                amount
+            )
+        );
+        return success;
     }
 }
